@@ -4,11 +4,11 @@ const MTOW = 73900; // kg
 const maxThrust = 118000 * 2; // Newtons (2x engines)
 const wingArea = 122.6; // m^2
 const frontalArea = 30; // m^2
-const Cd0 = 0.028; // Zero-lift drag coefficient for the aircraft
+const Cd0 = 0.1; // Zero-lift drag coefficient for the aircraft
 const inducedDragFactor = Math.PI * 9.5 * 0.78; // Induced drag factor for the aircraft
 
 const rotateSpeed = 150;
-const initialClimbSpeed = 175; // Initial climb speed in knots
+const initialClimbSpeed = 200; // Initial climb speed in knots
 const lowClimbSpeed = 250; // Low climb speed in knots
 const highClimbSpeed = 290; // High climb speed in knots
 const highDescentSpeed = 300; // High descent speed in knots
@@ -34,7 +34,7 @@ class Aircraft {
     this.cruiseAlt =
       cruiseAlt.min + Math.random() * (cruiseAlt.max - cruiseAlt.min);
 
-    this.mass = MTOW * (0.65 + Math.random() * 0.35);
+    this.mass = 70000;
     this.maxThrust = maxThrust;
     this.wingArea = wingArea;
     this.frontalArea = frontalArea;
@@ -80,12 +80,16 @@ class Aircraft {
     this.history = {
         time: [],
         pitch: [],
+        pitchRate: [],
         angleOfAttack: [],
         altitude: [],
         verticalSpeed: [],
         indicatedAirspeed: [],
         liftCoefficient: [],
-        targetSpeed: []
+        targetSpeed: [],
+        speedError: [],
+        pidIntegral: [],
+        pidDerivative: []
     };
   }
 
@@ -115,31 +119,28 @@ class Aircraft {
     // --- 3. PITCH CONTROL (AUTOPILOT) ---
     // The PID controller now adjusts pitch rate to achieve the target airspeed.
     const speedError = this.targetSpd - this.indicatedAirspeed;
-    const Kp = 1; 
-    const Ki = 0.01;
-    const Kd = 10;
+    const Kp = -100; 
+    const Ki = 0;
+    const Kd = 0;
 
     // Simple PID function for pitch with anti-windup
-    const integralMax = 10;
     this.pitchPid.integral += speedError * deltaTime;
-    // Clamp the integral before using it in the PID calculation (anti-windup)
-    if (this.pitchPid.integral > integralMax) this.pitchPid.integral = integralMax;
-    if (this.pitchPid.integral < -integralMax) this.pitchPid.integral = -integralMax;
 
     const derivative = (speedError - this.pitchPid.prevError) / deltaTime;
     this.pitchPid.prevError = speedError;
 
     // The output is a desired PITCH RATE. If speed is low, pitch down (negative rate).
-    const desiredPitchRate = -(Kp * speedError + Ki * this.pitchPid.integral + Kd * derivative);
+    const desiredPitchRate =  (Kp * speedError + Ki * this.pitchPid.integral + Kd * derivative);
     
     // --- 4. ROTATIONAL KINEMATICS (Simplified) ---
     // We directly adjust the pitch rate towards the rate desired by the PID controller.
     // This simulates the aircraft's control response without complex moment calculations.
-    const pitchResponseFactor = 0.1; // How quickly the aircraft responds to pitch commands (higher is faster)
+    const pitchResponseFactor = 0.0001; // How quickly the aircraft responds to pitch commands (higher is faster)
 
     // The change in pitchRate is proportional to the difference between the desired and current rates.
     const pitchRateError = desiredPitchRate - this.pitchRate;
-    this.pitchRate += pitchRateError * pitchResponseFactor * deltaTime;
+    //this.pitchRate += pitchRateError * pitchResponseFactor * deltaTime;
+    this.pitchRate = desiredPitchRate * pitchResponseFactor; // Directly set pitchRate for more immediate response
 
     // Update pitch angle from the new pitch rate
     this.pitch += this.pitchRate * deltaTime;
@@ -156,10 +157,10 @@ class Aircraft {
     // --- 6. AOA to CL CONVERSION (PLACEHOLDER) ---
     // This is a crucial new step. For now, a simple linear approximation is used.
     // A typical Cl-alpha slope for a subsonic airfoil is ~0.1 per degree.
-    const clAlphaSlope = 0.1;
-    const zeroLiftAoA = -1.5; // The AoA at which the wing produces zero lift
+    const clAlphaSlope = 0.14;
+    const zeroLiftAoA = -5; // The AoA at which the wing produces zero lift
     this.liftCoefficient = clAlphaSlope * (this.angleOfAttack - zeroLiftAoA);
-    this.liftCoefficient = Math.min(Math.max(this.liftCoefficient, -0.5), 1.6); // Clamp to realistic limits
+    //this.liftCoefficient = Math.min(Math.max(this.liftCoefficient, -0.5), 1.6); // Clamp to realistic limits
 
     // --- 7. FORCE CALCULATIONS (Updated) ---
     this.lift = 0.5 * airDensity * Math.pow(trueAirspeedMPS, 2) * this.wingArea * this.liftCoefficient;
@@ -201,23 +202,25 @@ class Aircraft {
     console.log(`Vertical Speed: ${this.verticalSpeed.toFixed(2)} ft/min`);
     console.log(`Target Speed: ${this.targetSpd.toFixed(2)} knots`);
     console.log(`Indicated Airspeed: ${this.indicatedAirspeed.toFixed(2)} knots`);
-    console.log(`Lift Coefficient: ${this.liftCoefficient.toFixed(3)}`);
     console.log(`Pitch: ${this.pitch.toFixed(2)}°`);
-    console.log(`Angle of Attack: ${this.angleOfAttack.toFixed(2)}°`);
-
 
     // --- 9. DATA RECORDING ---
     // Make sure to add the new properties to your history object in the constructor if you want to record them
-    this.history.time.push(simulationTime.toFixed(1));
-    this.history.altitude.push(this.altitude.toFixed(2));
-    this.history.pitch.push(this.pitch.toFixed(2));
-    this.history.angleOfAttack.push(this.angleOfAttack.toFixed(2));
-    this.history.verticalSpeed.push(this.verticalSpeed.toFixed(2));
-    this.history.indicatedAirspeed.push(this.indicatedAirspeed.toFixed(2));
+    this.history.time.push(simulationTime.toFixed(3));
+    this.history.altitude.push(this.altitude.toFixed(3));
+    this.history.pitch.push(this.pitch.toFixed(3));
+    this.history.pitchRate.push(this.pitchRate.toFixed(3));
+    this.history.angleOfAttack.push(this.angleOfAttack.toFixed(3));
+    this.history.verticalSpeed.push(this.verticalSpeed.toFixed(3));
+    this.history.indicatedAirspeed.push(this.indicatedAirspeed.toFixed(3));
     this.history.liftCoefficient.push(this.liftCoefficient.toFixed(3));
-    this.history.targetSpeed.push(this.targetSpd);
-    if (this.history.pitch) this.history.pitch.push(this.pitch.toFixed(2));
-    if (this.history.aoa) this.history.aoa.push(this.angleOfAttack.toFixed(2));
+    this.history.targetSpeed.push(this.targetSpd.toFixed(3));
+    this.history.speedError.push(Kp * speedError.toFixed(3));
+    this.history.pidIntegral.push(Ki * this.pitchPid.integral.toFixed(3));
+    this.history.pidDerivative.push(Kd * derivative.toFixed(3));
+
+    if (this.history.pitch) this.history.pitch.push(this.pitch.toFixed(3));
+    if (this.history.aoa) this.history.aoa.push(this.angleOfAttack.toFixed(3));
 }
 
   PIDController(targetError, Kp, Ki, Kd, deltaTime) {
