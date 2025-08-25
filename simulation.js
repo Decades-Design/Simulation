@@ -119,9 +119,9 @@ class Aircraft {
     // --- 3. PITCH CONTROL (AUTOPILOT) ---
     // The PID controller now adjusts pitch rate to achieve the target airspeed.
     const speedError = this.targetSpd - this.indicatedAirspeed;
-    const Kp = -100; 
-    const Ki = 0;
-    const Kd = 0;
+    const Kp = -10; 
+    const Ki = -0.1;
+    const Kd = -50;
 
     // Simple PID function for pitch with anti-windup
     this.pitchPid.integral += speedError * deltaTime;
